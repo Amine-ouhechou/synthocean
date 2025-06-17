@@ -9,7 +9,7 @@ from inpoly.inpoly2 import inpoly2
 
 
 
-def read_netcdf_files(file1, file2, file3):
+def read_netcdf_files(file1, file2, file3, time_name = "time_counter"):
     """
     Reads three NetCDF files and returns the datasets.
     
@@ -35,11 +35,9 @@ def read_netcdf_files(file1, file2, file3):
         ds2 = xr.open_dataset(file2) if extension2 == ".nc" else xr.open_zarr(file2) #mask model 
         
     ds3 = xr.open_dataset(file3)
-    
-    ds1["ssh"] = ds1["sossheig"].isel(time_counter=0)
-    del ds1["sossheig"]
-    
-    ds3["ssh"] = ds3["ssha"]  + ds3["mdt"]
+
+    # Select first time step if a time dimension exists (SWOT only needs 2D fields)
+    ds1 = ds1.isel({time_name: 0}) if time_name in ds1.dims else ds1  # indeed, if the dataset has time dimension. For the moment only one time step is needed
     
     return ds1, ds2, ds3
 
@@ -155,7 +153,6 @@ def open_model_data(ds_var, ds_coords,interpolator, var, latitude_array, longitu
     lon_flat = lon_in # lon_values.flatten()
     var_flat = var_in # var_values.flatten()
     
-   
           
     # Create a scattered data interpolator  !!!!!!! car c'est irregular 2D grids)
     if interpolator == "scipy_interpolator":
@@ -272,16 +269,20 @@ def main():
     parser.add_argument("-k", "--mask_file", required=True, help="Path of the input mask file (NETCDF or zarr)")
     parser.add_argument("-s", "--swot_file", required=True, help="Path of the input SWOT file (NETCDF or zarr)")
     parser.add_argument("-o", "--output_file", required=True, help="Path of the output NETCDF file")
+    parser.add_argument("-v", "--model_var", required=True, 
+                        help="Name of the variable in the model file to interpolate (e.g., 'ssh', 'sossheig', ...)")
     parser.add_argument("-i", "--interpolator", type=validate_interpolator, required=True,
                         help=f"The interpolation method to use. "
                              f"Supported methods are: {', '.join(ALLOWED_INTERPOLATORS)}.\n"
                              f"Choose one from the list based on your needs.")
-    # Arguments for model's lat/lon variable names
+    
+    # Arguments for model's (lat/lon) variable names
     parser.add_argument("--model-lat-var", default="latitude",
                         help="Name of the latitude variable in the model NetCDF file (default: latitude).")
     parser.add_argument("--model-lon-var", default="longitude",
                         help="Name of the longitude variable in the model NetCDF file (default: longitude).")
-
+    parser.add_argument("--model-time-var", default="time_counter",
+                        help="Name of the time variable in the model NetCDF file (default: time_counter).")
     
     args = parser.parse_args()
 
@@ -294,10 +295,11 @@ def main():
 
     # read files
     interpolator = args.interpolator
+    var  = args.model_var
     print(f"Processing with interpolator: {interpolator}")
     ds_model, ds_mask, ds_swot = read_netcdf_files(args.model_file, args.mask_file, args.swot_file)
     # Analyse
-    finterp = open_model_data(ds_model, ds_mask,interpolator, "ssh", ds_swot.latitude, ds_swot.longitude, args.model_lat_var, args.model_lon_var)
+    finterp = open_model_data(ds_model, ds_mask,interpolator, var, ds_swot.latitude, ds_swot.longitude, args.model_lat_var, args.model_lon_var)
     output_ds = interp_satellite(ds_swot.latitude, ds_swot.longitude, ds_swot.cross_track_distance, ds_swot.quality_flag, interpolator, finterp, var="ssh")
     
     # Sauvegarder le fichier
