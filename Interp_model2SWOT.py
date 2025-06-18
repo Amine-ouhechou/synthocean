@@ -269,21 +269,21 @@ def main():
     parser.add_argument("-k", "--mask_file", required=True, help="Path of the input mask file (NETCDF or zarr)")
     parser.add_argument("-s", "--swot_file", required=True, help="Path of the input SWOT file (NETCDF or zarr)")
     parser.add_argument("-o", "--output_file", required=True, help="Path of the output NETCDF file")
-    parser.add_argument("-v", "--model_var", required=True, 
-                        help="Name of the variable in the model file to interpolate (e.g., 'ssh', 'sossheig', ...)")
+
     parser.add_argument("-i", "--interpolator", type=validate_interpolator, required=True,
                         help=f"The interpolation method to use. "
                              f"Supported methods are: {', '.join(ALLOWED_INTERPOLATORS)}.\n"
                              f"Choose one from the list based on your needs.")
     
     # Arguments for model's (lat/lon) variable names
-    parser.add_argument("--model-lat-var", default="latitude",
+    parser.add_argument("--model_lat_var", default="latitude",
                         help="Name of the latitude variable in the model NetCDF file (default: latitude).")
-    parser.add_argument("--model-lon-var", default="longitude",
+    parser.add_argument("--model_lon_var", default="longitude",
                         help="Name of the longitude variable in the model NetCDF file (default: longitude).")
-    parser.add_argument("--model-time-var", default="time_counter",
+    parser.add_argument("--model_time_var", default="time_counter",
                         help="Name of the time variable in the model NetCDF file (default: time_counter).")
-    
+    parser.add_argument("--model_ssh_var", default="ssh", 
+                        help="Name of the variable in the model file to interpolate (e.g., 'ssh', 'sossheig', ...)")
     args = parser.parse_args()
 
     # Pre-check existence of input files
@@ -295,11 +295,10 @@ def main():
 
     # read files
     interpolator = args.interpolator
-    var  = args.model_var
     print(f"Processing with interpolator: {interpolator}")
     ds_model, ds_mask, ds_swot = read_netcdf_files(args.model_file, args.mask_file, args.swot_file)
     # Analyse
-    finterp = open_model_data(ds_model, ds_mask,interpolator, var, ds_swot.latitude, ds_swot.longitude, args.model_lat_var, args.model_lon_var)
+    finterp = open_model_data(ds_model, ds_mask,interpolator, args.model_ssh_var, ds_swot.latitude, ds_swot.longitude, args.model_lat_var, args.model_lon_var)
     output_ds = interp_satellite(ds_swot.latitude, ds_swot.longitude, ds_swot.cross_track_distance, ds_swot.quality_flag, interpolator, finterp, var="ssh")
     
     # Sauvegarder le fichier
