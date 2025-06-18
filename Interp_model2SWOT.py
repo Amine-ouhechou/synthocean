@@ -296,7 +296,7 @@ def main():
     # read files
     interpolator = args.interpolator
     print(f"Processing with interpolator: {interpolator}")
-    ds_model, ds_mask, ds_swot = read_netcdf_files(args.model_file, args.mask_file, args.swot_file)
+    ds_model, ds_mask, ds_swot = read_netcdf_files(args.model_file, args.mask_file, args.swot_file, args.model_time_var)
     # Analyse
     finterp = open_model_data(ds_model, ds_mask,interpolator, args.model_ssh_var, ds_swot.latitude, ds_swot.longitude, args.model_lat_var, args.model_lon_var)
     output_ds = interp_satellite(ds_swot.latitude, ds_swot.longitude, ds_swot.cross_track_distance, ds_swot.quality_flag, interpolator, finterp, var="ssh")
