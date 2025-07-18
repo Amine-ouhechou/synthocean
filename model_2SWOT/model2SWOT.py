@@ -102,7 +102,7 @@ def select_area(lat, lon, var, latitude_array, longitude_array):
 
 
 
-def open_model_data(ds_var, ds_coords,interpolator, var, latitude_array, longitude_array, lat_name="latitude", lon_name="longitude"):
+def open_model_data(ds_var, ds_coords,interpolator, var, latitude_array, longitude_array, lat_name="latitude", lon_name="longitude",time_step=0):
     """
     Creates an interpolator from a model dataset containing the ssh variable.
     The spatial coordinates (latitude and longitude) are provided as 2D variables in a separate dataset.
@@ -137,7 +137,7 @@ def open_model_data(ds_var, ds_coords,interpolator, var, latitude_array, longitu
     
     # Ensure the variable has the correct dimensions (latitude, longitude)
     if var_values.ndim == 3:  # If an extra time dimension exists
-        var_values = var_values[0]  # Take only the first time step
+        var_values = var_values[time_step]  # Take only the first time step
 
     lon_in, lat_in, var_in = select_area(lon=lon_values,
                                          lat=lat_values,
@@ -153,26 +153,29 @@ def open_model_data(ds_var, ds_coords,interpolator, var, latitude_array, longitu
     lon_flat = lon_in # lon_values.flatten()
     var_flat = var_in # var_values.flatten()
     
-          
-    # Create a scattered data interpolator  !!!!!!! car c'est irregular 2D grids)
-    if interpolator == "scipy_interpolator":
-       
-        finterp = interpolate.LinearNDInterpolator(
-            list(zip(lat_flat, lon_flat)),
-            var_flat,
-            fill_value=np.nan
-        )
+    if np.size(var_flat)!=0: #Checking is not empty
         
-    elif interpolator == "pyinterp_interpolator":
+        # Create a scattered data interpolator  !!!!!!! car c'est irregular 2D grids)
+        if interpolator == "scipy_interpolator":
+            
+            finterp = interpolate.LinearNDInterpolator(
+               list(zip(lat_flat, lon_flat)),
+                var_flat,
+                fill_value=np.nan
+            )
+        
+        elif interpolator == "pyinterp_interpolator":
 
-        points = np.column_stack((lon_flat, lat_flat))
-        finterp = pyinterp.RTree()
-        finterp.packing(points, var_flat)
-    else:
-        raise ValueError(f"Unknown interpolator: {interpolator}")
+            points = np.column_stack((lon_flat, lat_flat))
+            finterp = pyinterp.RTree()
+            finterp.packing(points, var_flat)
+        else:
+            raise ValueError(f"Unknown interpolator: {interpolator}")
     
 
-    return finterp
+        return finterp
+    else:
+        return 0
 
 
 
@@ -284,6 +287,8 @@ def main():
                         help="Name of the time variable in the model NetCDF file (default: time_counter).")
     parser.add_argument("--model_ssh_var", default="ssh", 
                         help="Name of the variable in the model file to interpolate (e.g., 'ssh', 'sossheig', ...)")
+    parser.add_argument("--model_timestep_index", default="ssh", 
+                        help="Time step index in the model file to interpolate (by default is the first time-step)")
     args = parser.parse_args()
 
     # Pre-check existence of input files
@@ -298,11 +303,14 @@ def main():
     print(f"Processing with interpolator: {interpolator}")
     ds_model, ds_mask, ds_swot = read_netcdf_files(args.model_file, args.mask_file, args.swot_file, args.model_time_var)
     # Analyse
-    finterp = open_model_data(ds_model, ds_mask,interpolator, args.model_ssh_var, ds_swot.latitude, ds_swot.longitude, args.model_lat_var, args.model_lon_var)
-    output_ds = interp_satellite(ds_swot.latitude, ds_swot.longitude, ds_swot.cross_track_distance, ds_swot.quality_flag, interpolator, finterp, var="ssh")
-    # Sauvegarder le fichier
-    save_netcdf(output_ds, args.output_file)
-    print("Script finished successfully")
+    finterp = open_model_data(ds_model, ds_mask,interpolator, args.model_ssh_var, ds_swot.latitude, ds_swot.longitude, args.model_lat_var, args.model_lon_var,args.model_timestep_index)
+    if finterp !=0: # Checking finterp is not empty
+        output_ds = interp_satellite(ds_swot.latitude, ds_swot.longitude, ds_swot.cross_track_distance, ds_swot.quality_flag, interpolator, finterp, var="ssh")
+        # Sauvegarder le fichier
+        save_netcdf(output_ds, args.output_file)
+        print("Script finished successfully")
+    else:
+        print("The model has no information for the SWOT path")
 
 if __name__ == "__main__":
     main()
